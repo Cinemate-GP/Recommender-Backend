@@ -1,17 +1,21 @@
+"""
+Cinemate Recommender API
+
+This module defines the Flask API endpoints for the Cinemate recommender system.
+Implementation logic is contained in the recommender_service module.
+"""
 from flask import Flask, request, jsonify
+from recommender_service import (
+    get_cf_recommendations,
+    get_recommendations,
+    get_test_list,
+    get_similar_movies
+)
+import requests
+import json
+import sys
 
 app = Flask(__name__)
-
-# Dummy recommender functions
-
-def get_recommendations(user_id):
-    return ["Item 1", "Item 2", "Item 3"]  # Example output
-
-def get_test_list(gender, age, profession):
-    return ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5"]  # Example output
-
-def get_similar_movies(movie_id):
-    return ["Item 1", "Item 2", "Item 3", "Item 4", "Item 5", "Item 6", "Item 7"]  # Example output
 
 ######################################################################
 
@@ -27,6 +31,33 @@ def recommend_top_n():
     user_id = data.get('user_id')
     recommendations = get_recommendations(user_id)
     return jsonify({"recommendations": recommendations})
+
+@app.route('/user/cf_recommend', methods=['POST'])
+def cf_recommend():
+    """Endpoint for CF-based recommendations."""
+    data = request.get_json()  # Expecting JSON input like {"user_id": 123}
+    
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+    
+    user_id = data.get('user_id')
+    if user_id is None:
+        return jsonify({"error": "No user_id provided"}), 400
+    
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"error": "user_id must be an integer"}), 400
+    
+    # Get recommendations
+    movie_ids = get_cf_recommendations(user_id)
+    
+    return jsonify({
+        "user_id": user_id,
+        "count": len(movie_ids),
+        "recommendations": movie_ids
+    })
+
 
 @app.route('/user/test', methods=['POST'])
 def recommend_for_new_user():
@@ -44,5 +75,37 @@ def similar_movies():
     recommendations = get_similar_movies(movie_id)
     return jsonify({"recommendations": recommendations})
 
+# Test CF recommendations endpoint
+def test_cf_recommend(user_id=1):
+    url = "http://localhost:5000/user/cf_recommend"
+    data = {
+        "user_id": user_id  # Use the provided user_id
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    response = requests.post(url, data=json.dumps(data), headers=headers)
+    
+    print(f"Status Code: {response.status_code}")
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Response: {json.dumps(result, indent=2)}")
+    else:
+        print(f"Error: {response.text}")
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Check if called with test argument
+    if len(sys.argv) > 1 and sys.argv[1] == 'test':
+        # Default user ID
+        user_id = 1
+        
+        # Check if user ID was provided as command-line argument
+        if len(sys.argv) > 2:
+            try:
+                user_id = int(sys.argv[2])
+                print(f"Testing with user_id: {user_id}")
+            except ValueError:
+                print(f"Invalid user_id: {sys.argv[2]}. Using default user_id: 1")
+        
+        test_cf_recommend(user_id)
+    else:
+        app.run(debug=True)
