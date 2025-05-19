@@ -32,31 +32,26 @@ def recommend_top_n():
     recommendations = get_recommendations(user_id)
     return jsonify({"recommendations": recommendations})
 
-@app.route('/user/cf_recommend', methods=['POST'])
-def cf_recommend():
-    """Endpoint for CF-based recommendations."""
-    data = request.get_json()  # Expecting JSON input like {"user_id": 123}
+@app.route('/user/cf_recommend/<int:user_id>', methods=['GET'])
+def cf_recommend(user_id):
+    """Endpoint for CF-based recommendations.
     
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-    
-    user_id = data.get('user_id')
-    if user_id is None:
-        return jsonify({"error": "No user_id provided"}), 400
-    
+    Now accessible via GET request with user_id in the URL path:
+    http://localhost:5000/user/cf_recommend/661
+    """
     try:
-        user_id = int(user_id)
+        # Get recommendations
+        movie_ids = get_cf_recommendations(user_id)
+        
+        return jsonify({
+            "user_id": user_id,
+            "count": len(movie_ids),
+            "recommendations": movie_ids
+        })
     except ValueError:
-        return jsonify({"error": "user_id must be an integer"}), 400
-    
-    # Get recommendations
-    movie_ids = get_cf_recommendations(user_id)
-    
-    return jsonify({
-        "user_id": user_id,
-        "count": len(movie_ids),
-        "recommendations": movie_ids
-    })
+        return jsonify({"error": "Invalid user_id format"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/user/test', methods=['POST'])
@@ -77,13 +72,10 @@ def similar_movies():
 
 # Test CF recommendations endpoint
 def test_cf_recommend(user_id=1):
-    url = "http://localhost:5000/user/cf_recommend"
-    data = {
-        "user_id": user_id  # Use the provided user_id
-    }
+    url = f"http://localhost:5000/user/cf_recommend/{user_id}"
     
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(url, data=json.dumps(data), headers=headers)
+    # Using GET request now instead of POST
+    response = requests.get(url)
     
     print(f"Status Code: {response.status_code}")
     if response.status_code == 200:
