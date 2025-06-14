@@ -11,9 +11,7 @@ from recommender_service import (
     get_test_list,
     get_similar_movies
 )
-import requests
-import json
-import sys
+from sentiment_service import predict_sentiment
 
 app = Flask(__name__)
 
@@ -70,34 +68,42 @@ def similar_movies():
     recommendations = get_similar_movies(movie_id)
     return jsonify({"recommendations": recommendations})
 
-# Test CF recommendations endpoint
-def test_cf_recommend(user_id=1):
-    url = f"http://localhost:5000/user/cf_recommend/{user_id}"
+@app.route('/review/sentiment', methods=['POST'])
+def analyze_sentiment():
+    """
+    Analyze sentiment of a movie review.
     
-    # Using GET request now instead of POST
-    response = requests.get(url)
+    Expected JSON input: {"review": "This movie was amazing!"}
     
-    print(f"Status Code: {response.status_code}")
-    if response.status_code == 200:
-        result = response.json()
-        print(f"Response: {json.dumps(result, indent=2)}")
-    else:
-        print(f"Error: {response.text}")
+    Returns:
+        JSON response with sentiment analysis results:
+        {
+            "sentiment": "positive" or "negative",
+            "confidence": 0.85,
+            "probabilities": {
+                "negative": 0.15,
+                "positive": 0.85
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        review_text = data.get('review')
+        
+        # Get sentiment prediction from service (includes validation)
+        result = predict_sentiment(review_text)
+          # Check if there was an error in prediction
+        if "error" in result:
+            return jsonify(result), 400 if "Missing" in result["error"] or "empty" in result["error"] or "invalid" in result["error"] else 500
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    # Check if called with test argument
-    if len(sys.argv) > 1 and sys.argv[1] == 'test':
-        # Default user ID
-        user_id = 1
-        
-        # Check if user ID was provided as command-line argument
-        if len(sys.argv) > 2:
-            try:
-                user_id = int(sys.argv[2])
-                print(f"Testing with user_id: {user_id}")
-            except ValueError:
-                print(f"Invalid user_id: {sys.argv[2]}. Using default user_id: 1")
-        
-        test_cf_recommend(user_id)
-    else:
-        app.run(debug=True)
+    app.run(debug=True)
